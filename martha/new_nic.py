@@ -1,3 +1,4 @@
+import ci_nic_inventory
 def generate_nic(ip_address):
     # Split the IP address into octets
     # check 2nd octet of the IP address
@@ -8,8 +9,7 @@ def generate_nic(ip_address):
         # Join the remaining octets back together
         # get the nic from new ip address with 3 octets
 
-    import introcs
-    oct=introcs.split(ip_address,'.')
+    oct=ip_address.split('.')
     nip=(oct[0],oct[1])
     nipa=((oct[0],oct[1],oct[2]))
     if oct[1]=='9':
@@ -18,5 +18,5 @@ def generate_nic(ip_address):
         return nic2
     else:
         newnipa='.'.join(nipa)
-        nic3=ci_nic_inventory.nic_3_octect_names[f'{newnipa}']
+        nic3=ci_nic_inventory.nic_3_octet_names[f'{newnipa}']
         return nic3
