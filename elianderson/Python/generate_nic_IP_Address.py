@@ -1,5 +1,5 @@
 import ci_nic_inventory
-ip_address = '10.9.5.6'
+
 # generate ci nic based on the ipaddress
 def generate_nic(ip_address):
     # Split the IP address into octets
