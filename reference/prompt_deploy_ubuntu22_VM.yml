@@ -1,0 +1,274 @@
+### First file break ---------------------------------------------------------------------------------------------
+---
+- hosts: localhost
+  # including vars file that is included in the folder
+  vars_files:
+    - "{{ playbook_dir }}/vars/hashivaultvars-linux.yml"
+  
+  # confirmation of what user fills out from GUI
+  tasks:
+    - name: Disable SSL certificate verification
+      set_fact:
+        ansible_env:
+          no_proxy: "*"
+          SSL_CERT_REQS: "CERT_NONE"
+          REQUESTS_CA_BUNDLE: ""
+
+    - name: Insert VM Name to the build vm.txt File
+      copy:
+        content: "{{ vm_name }}"
+        dest: "{{ playbook_dir }}/build/vm-l.txt"
+        
+    - name: Confirm VM Name was Successfully written to VM.txt 
+      ansible.builtin.debug:
+        msg: "the value of vm.txt is {{lookup('ansible.builtin.file', '{{ playbook_dir }}/build/vm-l.txt') }}"
+
+    - name: Insert IP in to the build ip.txt File
+      copy:
+        content: "{{ vm_ip }}"
+        dest: "{{ playbook_dir }}/build/ip-l.txt"
+
+    - name: Confirm IP address was Successfully written to IP.txt 
+      ansible.builtin.debug:
+        msg: "the value of ip.txt is {{lookup('ansible.builtin.file', '{{ playbook_dir }}/build/ip-l.txt') }}"
+
+    - name: test authentication with a Vault app role
+      debug:
+        msg: "{{ lookup('hashi_vault', 'validate_certs=false secret={{hashivault_sanity_kv}} auth_method={{hashivault_auth}} role_id={{hashivault_role_id}} secret_id={{hashivault_secret_id}} mount_point={{hashivault_mount}} url={{hashivault_url}}') }}"
+
+    - name: Print a message
+      ansible.builtin.debug:
+        msg: 'VM Name will be: {{ vm_name }}'
+
+    - name: Print a message
+      ansible.builtin.debug:
+        msg: 'IP Address will be: {{ vm_ip }}'
+
+    # gateway is generated using a python function and this file is populated based on that
+    - name: Print a message
+      ansible.builtin.debug:
+        msg: 'Gateway Address will be: {{ vm_gw }}'
+
+    # nic is generated using a python function and this file is populated based on that
+    - name: Print a message
+      ansible.builtin.debug:
+        msg: 'Port Group will be: {{ vm_nic }}'
+
+    - name: Pause for validation of input values
+      ansible.builtin.pause:
+        prompt: "Ensure the above values are correct.  Use Crtl + C to exit or continue"
+        minutes: 1
+### First file break --------------------------------------------------------------------------------------------- Elianderson's Team
+
+### Second file break -------------------------------------------------------------------------------------------- 
+    # cloning template based on the information processed and entered
+    - name: Clone the template
+      community.vmware.vmware_guest:
+        hostname: "gmc6700.ci.org"
+        username: "{{ ansibleusr }}"
+        password: "{{ ansiblepwd }}"
+        validate_certs: False
+        name: "{{ vm_name }}"
+        template: Ubuntu22-Ansible-Template
+        datacenter: "GMC"
+        folder: /Ansible
+        cluster: "G14-Skylake"
+        datastore: "GMCdHCI-FC"
+        networks:
+        - name: "{{ vm_nic }}"
+          ip: "{{ vm_ip }}"
+          netmask: 255.255.255.0
+          gateway: "{{ vm_gw }}"
+          type: static
+          wait_for_ip_address: True   
+        customization:
+          dns_servers:
+            - 10.8.128.7
+            - 10.8.1.9
+          dns_suffix:
+            - ci.org   
+          hostname: "{{ vm_name }}"             
+        state: poweredon
+        wait_for_customization: yes
+        wait_for_customization_timeout: "600"
+      delegate_to: localhost
+### Second file break -------------------------------------------------------------------------------------------- Landon's Team
+
+### Third file break --------------------------------------------------------------------------------------------- ?
+    # change this to a write .ini file filling it up with server name and vars
+    - name: Clear inventory in LinuxBuild File
+      copy:
+        content: "{{ linuxbuildcontent }}"
+        dest: "{{ playbook_dir }}/inventory/linuxbuild"
+
+    - name: Insert VM Name to the inventory linuxbuild file
+      lineinfile:
+        path: "{{ playbook_dir }}/inventory/linuxbuild"
+        line: "{{ vm_name }}"
+    - name: Refresh Inventory Hosts File
+      meta: refresh_inventory
+### Third file break ---------------------------------------------------------------------------------------------
+
+### Fourth file break -------------------------------------------------------------------------------------------- Gabie's Team
+# create DNS record. make sure we are targeting the correct DNS
+- name: Playbook - Ensure DNS A record created
+  hosts: ops
+  vars_files:
+    - "{{ playbook_dir }}/vars/hashivaultvars-linux.yml"
+  tasks:
+  - name: Disable SSL certificate verification
+    set_fact:
+      ansible_env:
+        no_proxy: "*"
+        SSL_CERT_REQS: "CERT_NONE"
+        REQUESTS_CA_BUNDLE: ""
+
+  - name: Set Hashi Vault Facts
+    set_fact:
+        ansible_password: "{{ ansiblepwd }}"
+
+  - name: Create DNS A Record
+    community.windows.win_dns_record:
+      computer_name: "gmc0002.ci.org"
+      name: "{{lookup('ansible.builtin.file', '{{ playbook_dir }}/build/vm-l.txt') }}"
+      type: "A"
+      value: "{{lookup('ansible.builtin.file', '{{ playbook_dir }}/build/ip-l.txt') }}"
+      zone: "ci.org"
+      state: present
+
+  - name: Pause for New VM to Reboot & DNS to Propogate
+    ansible.builtin.pause:
+      prompt: "VM Rebooting & DNS Propogating.  Use Crtl + C to exit or continue"
+      minutes: 15
+### Fourth file break --------------------------------------------------------------------------------------------
+
+### Fifth file break --------------------------------------------------------------------------------------------- Jonathan's Team
+# after the server is built, we create sudo users to the config
+- name: Playbook - Ubunutu Server Config > TimeZone | Realm | Sudo Group | Updates
+  hosts: linux
+  vars_files:
+    - "{{ playbook_dir }}/vars/hashivaultvars-linux.yml"
+  become: yes
+  become_method: sudo
+
+  # Bonus, it'll be fun if we can add sudo users from the GUI yea?
+  vars:
+    domain: CI.ORG
+    usernames:
+      - awx.svc
+      - ansible.svc
+      - bradk
+      - donaldy
+      - georgec
+      - jonathanp
+      - mattf
+      - ricardov    
+      - wesd
+  tasks:
+  - name: Disable SSL certificate verification
+    set_fact:
+      ansible_env:
+        no_proxy: "*"
+        SSL_CERT_REQS: "CERT_NONE"
+        REQUESTS_CA_BUNDLE: ""
+
+  - name: Set timezone to America/Denver
+    community.general.timezone:
+      name: America/Denver
+    become: yes
+    become_method: sudo
+
+  - name: Install realmd package
+    ansible.builtin.apt:
+      name: realmd
+      state: present
+
+  - name: Discover Active Directory domain
+    command: realm discover CI.ORG
+    register: realm_discover
+    changed_when: false
+
+  - name: Join Ubuntu server to Active Directory domain
+    expect:
+      command: realm join --user={{ ad_user }} CI.ORG
+      responses:
+        ".*Password for .*:": "{{ ansiblepwd }}"
+    register: realm_join
+    changed_when: realm_join.stdout is not search('Already joined to this domain')
+    ignore_errors: true
+
+  - name: Display realm join output
+    debug:
+      var: realm_join.stdout_lines
+      verbosity: 1
+
+  - name: Enable Make Home Directory Setting for Realm Users
+    command: pam-auth-update --enable mkhomedir
+
+  - name: Run Realm Permit List
+    command: "realm permit {{ item }}@{{ domain }}"
+    loop: "{{ usernames }}"
+  
+  - name: Add users to sudo group
+    ansible.builtin.user:
+      name: "{{ item }}@{{ domain }}"
+      groups: sudo
+      append: yes
+    loop: "{{ usernames }}"
+
+  # - name: Read sssd.conf contents
+  #   slurp:
+  #     path: /etc/sssd/sssd.conf
+  #   register: sssd_conf_file
+
+  # - name: Create backup of sssd.conf
+  #   copy:
+  #     content: "{{ sssd_conf_file.content | b64decode }}"
+  #     dest: /etc/sssd/sssd.conf.bak
+  #     mode: '0644'
+
+  # - name: Add default domain suffix to sssd.conf
+  #   blockinfile:
+  #     path: /etc/sssd/sssd.conf
+  #     block: |
+  #       default_domain_suffix = {{ domain }}
+  #     insertafter: '^(\[sssd\])$'
+  
+  # - name: Restart sssd.service
+  #   ansible.builtin.service:
+  #     name: sssd
+  #     state: restarted
+  
+  - name: Update package cache
+    ansible.builtin.apt:
+      update_cache: yes
+
+  - name: Update all packages to their latest version
+    ansible.builtin.apt:
+      name: "*"
+      state: latest
+
+  - name: Perform a dist-upgrade
+    ansible.builtin.apt:
+      upgrade: dist
+      update_cache: yes
+      autoremove: yes
+      autoclean: yes
+
+  - name: Check if a reboot is required
+    ansible.builtin.stat:
+      path: /var/run/reboot-required
+      get_md5: no
+    register: reboot_required_file
+
+  - name: Reboot the server (if required)
+    ansible.builtin.reboot:
+    when: reboot_required_file.stat.exists == true
+### Fifth file break ---------------------------------------------------------------------------------------------
+
+# Things to add:
+# install datadog
+# install s1
+# install ssm agent
+# install SSL cert
+# take send user confirmation email when it's done

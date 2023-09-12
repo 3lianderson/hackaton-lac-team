@@ -1,0 +1,10 @@
+---
+- hosts: master
+  vars:
+    source_file: "/tmp/test.txt"
+  
+  tasks:
+  - name: Copy a test file to all windows servers
+    win_copy:
+      src: "{{ source_file }}"
+      dest: "c:\\Windows\\Temp\\Test.txt"

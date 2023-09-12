@@ -1,0 +1,40 @@
+---
+- name: Ensure that IIS is installed
+  win_feature:
+    name: "Web-Server"
+    state: present
+    restart: no
+    include_sub_features: no
+    include_managemente_tools: no
+
+- name: Ensure the website directory is created
+  win_file:
+    path: "{{ site_path }}"
+    state: directory
+  
+- name: Create sub iis website
+  win_iis_website:
+    name: "Website Application"
+    state: started
+    port: 8080
+    physical_path: "{{ site_path }}"
+  
+- name: Copy default index file to site
+  win_copy:
+    src: "{{ default_index_file }}"
+    dest: "{{ site_path }}\\index.html"
+
+- name: Ensure firewall rule is in place for site
+  win_firewall_rule:
+    name: website
+    enabled: yes
+    state: present
+    localport: 8080
+    action: allow
+    direction: in
+    protocol: tcp
+
+- name: Install firefox
+  win_chocolatey:
+    name: firefox
+    state: present
