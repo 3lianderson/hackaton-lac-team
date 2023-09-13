@@ -1,0 +1,62 @@
+---
+- name: Disable SSL certificate verification
+  set_fact:
+    ansible_env:
+      no_proxy: "*"
+      SSL_CERT_REQS: "CERT_NONE"
+      REQUESTS_CA_BUNDLE: ""
+
+- name: Create build directory
+  file:
+    path: "{{ ansible_path }}/build/"
+    state: directory
+
+- name: Insert VM Name to the build vm.txt File
+  copy:
+    content: "{{ vm_name }}"
+    dest: "{{ ansible_path }}/build/vm-l.txt"
+
+- name: Change file permissions
+  ansible.builtin.file:
+    path: "{{ ansible_path }}/build/vm-l.txt"
+    mode: "0666"
+        
+- name: Confirm VM Name was Successfully written to VM.txt 
+  ansible.builtin.debug:
+    msg: "the value of vm-l.txt is {{lookup('ansible.builtin.file', '{{ ansible_path }}/build/vm-l.txt') }}"
+
+- name: Insert IP in to the build ip.txt File
+  copy:
+    content: "{{ vm_ip }}"
+    dest: "{{ ansible_path }}/build/ip-l.txt"
+
+- name: Confirm IP address was Successfully written to IP.txt 
+  ansible.builtin.debug:
+    msg: "the value of ip-l.txt is {{lookup('ansible.builtin.file', '{{ ansible_path }}/build/ip-l.txt') }}"
+
+- name: test authentication with a Vault app role
+  debug:
+    msg: "{{ lookup('hashi_vault', 'validate_certs=false secret={{hashivault_sanity_kv}} auth_method={{hashivault_auth}} role_id={{hashivault_role_id}} secret_id={{hashivault_secret_id}} mount_point={{hashivault_mount}} url={{hashivault_url}}') }}"
+
+- name: Print a message
+  ansible.builtin.debug:
+    msg: 'VM Name will be: {{ vm_name }}'
+
+- name: Print a message
+  ansible.builtin.debug:
+    msg: 'IP Address will be: {{ vm_ip }}'
+
+# gateway is generated using a python function and this file is populated based on that
+- name: Print a message
+  ansible.builtin.debug:
+    msg: 'Gateway Address will be: {{ vm_gw }}'
+
+# nic is generated using a python function and this file is populated based on that
+- name: Print a message
+  ansible.builtin.debug:
+    msg: 'Port Group will be: {{ vm_nic }}'
+
+- name: Pause for validation of input values
+  ansible.builtin.pause:
+    prompt: "Ensure the above values are correct.  Use Crtl + C to exit or continue"
+    minutes: 1

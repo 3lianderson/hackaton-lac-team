@@ -1,0 +1,6 @@
+---
+- name: Prompt to Deploy Ubuntu 22 VM
+  become: yes
+  hosts: master
+  roles:
+  - ubuntu_VM
